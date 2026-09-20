@@ -20,7 +20,6 @@ import types
 from concordia.language_model import language_model
 from concordia.language_model import no_language_model
 
-
 _REGISTRY = types.MappingProxyType({
     'amazon_bedrock': 'amazon.amazon_bedrock_model.AmazonBedrockLanguageModel',
     'gemini': 'google.gemini_model.GeminiModel',
@@ -35,6 +34,8 @@ _REGISTRY = types.MappingProxyType({
     'mistral': 'mistral.mistral_model.MistralLanguageModel',
     'ollama': 'ollama.ollama_model.OllamaLanguageModel',
     'openai': 'openai.gpt_model.GptLanguageModel',
+    'openai_compatible': 'openai_compatible.OpenAICompatibleLanguageModel',
+    'vectorengine': 'openai_compatible.VectorEngineLanguageModel',
     'pytorch_gemma': (
         'huggingface.pytorch_gemma_model.PyTorchGemmaLanguageModel'
     ),
@@ -64,6 +65,7 @@ def language_model_setup(
     api_type: str,
     model_name: str,
     api_key: str | None = None,
+    api_base: str | None = None,
     device: str | None = None,
     disable_language_model: bool = False,
 ) -> language_model.LanguageModel:
@@ -73,6 +75,7 @@ def language_model_setup(
     api_type: The type of API to use.
     model_name: The name of the specific model to use.
     api_key: The API key to use (if supported).
+    api_base: The base URL for an OpenAI-compatible API (if supported).
     device: The device to use for model processing (if supported).
     disable_language_model: If True then disable the language model. This uses a
       model that returns an empty string whenever asked for a free text response
@@ -87,6 +90,8 @@ def language_model_setup(
   kwargs = {'model_name': model_name}
   if api_key is not None:
     kwargs['api_key'] = api_key
+  if api_base is not None:
+    kwargs['api_base'] = api_base
   if device is not None:
     kwargs['device'] = device
 

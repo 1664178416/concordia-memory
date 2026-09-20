@@ -21,6 +21,23 @@ The current policies are `no_memory`, `full_context`, `flat_episodic`, and
 controller: observations update episodic, belief, directed-relation, and
 public-view state, and the resulting state guides partner selection.
 
+## Calling an OpenAI-compatible model
+
+The repository also exposes a dependency-free wrapper for chat-completions
+compatible services. VectorEngine can be used through the `vectorengine`
+`api_type`; the key is read only from the current process environment.
+
+```powershell
+$env:VECTORENGINE_API_KEY = "<your-key>"
+$env:VECTORENGINE_BASE_URL = "https://api.vectorengine.ai/v1"
+$env:VECTORENGINE_MODEL = "gpt-4o-mini"
+python -m examples.social_memory_community.vectorengine_smoke
+```
+
+The same wrapper can be used with another provider through
+`api_type="openai_compatible"`, passing its `api_base` and `api_key` to
+`language_model_setup`. Keys are never written to experiment outputs.
+
 This environment is intentionally separate from the existing resource-dilemma
 example. The next milestone will add a Concordia component and an LLM-backed
 memory controller using the same policy interface.
