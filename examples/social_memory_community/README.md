@@ -34,6 +34,15 @@ $env:VECTORENGINE_MODEL = "gpt-4o-mini"
 python -m examples.social_memory_community.vectorengine_smoke
 ```
 
+Run one model-driven interaction with all four memory views in the prompt:
+
+```powershell
+python -m examples.social_memory_community.llm_one_round
+```
+
+This command performs one E/B/R/P -> model choice -> environment outcome ->
+memory update cycle and prints the structured state before and after the call.
+
 The same wrapper can be used with another provider through
 `api_type="openai_compatible"`, passing its `api_base` and `api_key` to
 `language_model_setup`. Keys are never written to experiment outputs.
