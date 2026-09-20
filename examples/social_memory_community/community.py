@@ -7,10 +7,10 @@ from dataclasses import asdict
 import hashlib
 from typing import Any, Mapping, Sequence
 
+from concordia.language_model import language_model
 from examples.social_memory_community import metrics
 from examples.social_memory_community import policies
 from examples.social_memory_community import types
-
 
 DEFAULT_PROFILES = (
     types.AgentProfile("Alice", "cooperator"),
@@ -199,8 +199,21 @@ def run_simulation(
     observation_mode: types.ObservationMode = "mixed",
     public_reliability: float = 1.0,
     profiles: Sequence[types.AgentProfile] = DEFAULT_PROFILES,
+    model: language_model.LanguageModel | None = None,
+    llm_agents: Sequence[str] | None = None,
+    llm_temperature: float = 0.0,
+    llm_max_tokens: int = 128,
+    llm_timeout: float = language_model.DEFAULT_TIMEOUT_SECONDS,
+    fallback_policy: str = "deterministic",
+    model_name: str | None = None,
 ) -> types.SimulationTrace:
-  """Run one deterministic policy population through the environment."""
+  """Run one policy population through the objective environment.
+
+  When policy_name is llm_bidirectional, model is used only for the agents
+  listed in llm_agents. If the list is omitted, every agent uses the LLM
+  policy. Other agents use the deterministic bidirectional controller, which
+  makes one-agent live smoke tests inexpensive.
+  """
   if rounds < 1:
     raise ValueError("rounds must be positive.")
   environment = CommunityEnvironment(
@@ -209,9 +222,35 @@ def run_simulation(
       public_reliability=public_reliability,
       seed=seed,
   )
-  agent_policies = {
-      name: policies.make_policy(policy_name) for name in environment.agent_names
-  }
+  if policy_name == "llm_bidirectional":
+    if model is None:
+      raise ValueError("llm_bidirectional requires a language model instance.")
+    selected_llm_agents = set(
+        environment.agent_names if llm_agents is None else llm_agents
+    )
+    unknown_agents = selected_llm_agents.difference(environment.agent_names)
+    if unknown_agents:
+      raise ValueError(f"Unknown llm_agents: {sorted(unknown_agents)}")
+    agent_policies = {
+        name: policies.make_policy(
+            "llm_bidirectional"
+            if name in selected_llm_agents
+            else "bidirectional_social",
+            model=model,
+            top_k=6,
+            llm_temperature=llm_temperature,
+            llm_max_tokens=llm_max_tokens,
+            llm_timeout=llm_timeout,
+            fallback_policy=fallback_policy,
+            model_name=model_name,
+        )
+        for name in environment.agent_names
+    }
+  else:
+    agent_policies = {
+        name: policies.make_policy(policy_name)
+        for name in environment.agent_names
+    }
 
   for _ in range(rounds):
     for actor in environment.agent_names:
@@ -228,10 +267,16 @@ def run_simulation(
     environment.advance_round()
 
   run_metrics = metrics.compute_metrics(environment.results)
+  for policy in agent_policies.values():
+    for key, value in policy.get_diagnostics().items():
+      run_metrics[key] = run_metrics.get(key, 0.0) + value
   checkpoint = {
       "environment": environment.get_state(),
       "policies": {
           name: policy.get_state() for name, policy in agent_policies.items()
+      },
+      "policy_by_agent": {
+          name: policy.name for name, policy in agent_policies.items()
       },
   }
   return types.SimulationTrace(

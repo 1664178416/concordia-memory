@@ -58,6 +58,10 @@ class MemoryPolicy(ABC):
   def set_state(self, state: dict[str, Any]) -> None:
     """Restore JSON-compatible state."""
 
+  def get_diagnostics(self) -> dict[str, float]:
+    """Return optional runtime diagnostics for experiment logging."""
+    return {}
+
 
 class NoMemoryPolicy(MemoryPolicy):
   """Current-observation-only baseline."""
@@ -266,7 +270,17 @@ def _choose_partner(
   )
 
 
-def make_policy(name: str) -> MemoryPolicy:
+def make_policy(
+    name: str,
+    *,
+    model: Any | None = None,
+    top_k: int = 6,
+    llm_temperature: float = 0.0,
+    llm_max_tokens: int = 128,
+    llm_timeout: float = 60.0,
+    fallback_policy: str = "deterministic",
+    model_name: str | None = None,
+) -> MemoryPolicy:
   """Create a baseline by its CLI name."""
   if name == NoMemoryPolicy.name:
     return NoMemoryPolicy()
@@ -275,8 +289,22 @@ def make_policy(name: str) -> MemoryPolicy:
   if name == FlatEpisodicPolicy.name:
     return FlatEpisodicPolicy()
   if name == BidirectionalSocialMemoryPolicy.name:
-    return BidirectionalSocialMemoryPolicy()
+    return BidirectionalSocialMemoryPolicy(top_k=top_k)
+  if name == "llm_bidirectional":
+    if model is None:
+      raise ValueError("llm_bidirectional requires a language model instance.")
+    from examples.social_memory_community import llm_policy
+
+    return llm_policy.LlmBidirectionalSocialMemoryPolicy(
+        model,
+        top_k=top_k,
+        temperature=llm_temperature,
+        max_tokens=llm_max_tokens,
+        timeout=llm_timeout,
+        fallback_policy=fallback_policy,
+        model_name=model_name,
+    )
   raise ValueError(
       f"Unknown policy {name!r}; expected no_memory, full_context, "
-      "flat_episodic, or bidirectional_social."
+      "flat_episodic, bidirectional_social, or llm_bidirectional."
   )

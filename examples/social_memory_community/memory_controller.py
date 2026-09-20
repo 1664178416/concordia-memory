@@ -163,6 +163,66 @@ class MemoryController:
     )
     return tuple(ranked[: self.top_k])
 
+  def get_decision_context(
+      self,
+      actor: str,
+      candidates: Sequence[str],
+      round_index: int,
+  ) -> dict[str, Any]:
+    """Return a bounded, read-only E/B/R/P view for one decision.
+
+    The context is intentionally restricted to the candidate set.  This keeps
+    prompt growth bounded and makes the top-down query explicit: the current
+    actor and candidate partners determine which episodic records and states
+    are exposed to the decision layer.
+    """
+    if actor != self.owner:
+      raise ValueError(
+          f"Context owner is {self.owner!r}, but actor is {actor!r}."
+      )
+    candidate_list = tuple(dict.fromkeys(candidates))
+    structured = self.get_structured_state()
+
+    def candidate_states(
+        state_name: str, default_factory: Any
+    ) -> dict[str, dict[str, Any]]:
+      state_by_subject = structured[state_name]
+      return {
+          candidate: state_by_subject.get(
+              candidate, asdict(default_factory(candidate))
+          )
+          for candidate in candidate_list
+      }
+
+    return {
+        "schema_version": 1,
+        "owner": self.owner,
+        "round_index": round_index,
+        "candidates": list(candidate_list),
+        "E": [
+            asdict(event)
+            for event in self.retrieve(self.owner, candidate_list, round_index)
+        ],
+        "B": candidate_states(
+            "beliefs",
+            lambda candidate: types.BeliefState(
+                owner=self.owner, subject=candidate
+            ),
+        ),
+        "R": candidate_states(
+            "relations",
+            lambda candidate: types.RelationState(
+                owner=self.owner, partner=candidate
+            ),
+        ),
+        "P": candidate_states(
+            "public",
+            lambda candidate: types.PublicState(
+                owner=self.owner, subject=candidate
+            ),
+        ),
+    }
+
   def choose_partner(self, candidates: Sequence[str]) -> str:
     """Choose the candidate with the strongest B/R/P state."""
     if not candidates:
